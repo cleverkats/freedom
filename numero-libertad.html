@@ -1,0 +1,413 @@
+<title>Número de la Libertad</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600&family=Manrope:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: una columna en móvil (presupuesto y luego resultados, con barra fija de total); dos columnas en escritorio con resultados fijos a la derecha. */
+:root {
+  --bg: #FAF8F5;
+  --surface: #FFFFFF;
+  --surface-2: #F3EFE8;
+  --ink: #1B3B2B;
+  --ink-soft: #4F6A5B;
+  --line: #E6DFD3;
+  --gold: #C5A059;
+  --gold-ink: #8C6A2C;
+  --hero: #1B3B2B;
+  --hero-ink: #FAF8F5;
+  --hero-soft: #C9D6CD;
+  --font-display: "Fraunces", Georgia, "Times New Roman", serif;
+  --font-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111C16; --surface: #17251D; --surface-2: #1D2E24; --ink: #EFEAE1; --ink-soft: #A9BBAF;
+    --line: #2A3D32; --gold: #D2AE6A; --gold-ink: #D9B977; --hero: #20372A; --hero-ink: #FAF8F5; --hero-soft: #B8C9BD;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111C16; --surface: #17251D; --surface-2: #1D2E24; --ink: #EFEAE1; --ink-soft: #A9BBAF;
+  --line: #2A3D32; --gold: #D2AE6A; --gold-ink: #D9B977; --hero: #20372A; --hero-ink: #FAF8F5; --hero-soft: #B8C9BD;
+  color-scheme: dark;
+}
+body { background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; -webkit-font-smoothing: antialiased; }
+.wrap { padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+.font-display { font-family: var(--font-display); }
+.num { font-variant-numeric: tabular-nums; }
+h1, h2, h3 { text-wrap: balance; }
+.eyebrow { letter-spacing: .12em; text-transform: uppercase; font-size: 11px; font-weight: 700; }
+input[type=number]::-webkit-inner-spin-button, input[type=number]::-webkit-outer-spin-button { -webkit-appearance: none; margin: 0; }
+input[type=number] { -moz-appearance: textfield; }
+.field:focus-within { border-color: var(--gold); box-shadow: 0 0 0 3px color-mix(in srgb, var(--gold) 25%, transparent); }
+button:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; border-radius: 99px; background: linear-gradient(to right, var(--gold) var(--p), color-mix(in srgb, var(--hero-ink) 22%, transparent) var(--p)); }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 24px; height: 24px; border-radius: 50%; background: var(--hero-ink); border: 3px solid var(--gold); cursor: pointer; }
+input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border-radius: 50%; background: var(--hero-ink); border: 3px solid var(--gold); cursor: pointer; }
+.sticky-bar { padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px)); }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+
+<div id="root">
+  <p class="wrap" style="padding-block:40px;font-family:var(--font-body);color:var(--ink-soft)">Cargando la calculadora…</p>
+</div>
+
+<script src="https://cdn.tailwindcss.com/3.4.17"></script>
+<script>
+tailwind.config = {
+  theme: { extend: {
+    colors: {
+      bg: 'var(--bg)', surface: 'var(--surface)', surface2: 'var(--surface-2)', ink: 'var(--ink)', soft: 'var(--ink-soft)',
+      line: 'var(--line)', gold: 'var(--gold)', goldink: 'var(--gold-ink)', hero: 'var(--hero)', heroink: 'var(--hero-ink)', herosoft: 'var(--hero-soft)'
+    }
+  } }
+};
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.3.1/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.3.1/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.26.2/babel.min.js"></script>
+
+<script type="text/babel" data-presets="react">
+const { useState, useEffect, useMemo } = React;
+
+/* ---------- Configuración ---------- */
+const STORAGE_KEY = 'numero-libertad:v1';
+
+const CURRENCIES = {
+  PEN: { code: 'PEN', symbol: 'S/', label: 'Soles', locale: 'es-PE', decimals: 0 },
+  USD: { code: 'USD', symbol: '$', label: 'Dólares', locale: 'en-US', decimals: 0 },
+  CLP: { code: 'CLP', symbol: '$', label: 'Pesos chilenos', locale: 'es-CL', decimals: 0 },
+};
+
+const CATEGORIES = [
+  { id: 'esenciales', name: 'Gastos esenciales', hint: 'Lo que necesitas cada mes para vivir.',
+    items: [['vivienda', 'Vivienda / hipoteca'], ['servicios', 'Servicios (luz, agua, internet)'], ['alimentacion', 'Alimentación'], ['transporte', 'Transporte'], ['salud', 'Salud y seguros']] },
+  { id: 'estilo', name: 'Estilo de vida y diversión', hint: 'Lo que hace que tu vida se sienta tuya.',
+    items: [['salidas', 'Salidas y restaurantes'], ['viajes', 'Viajes (promedio mensual)'], ['hobbies', 'Hobbies']] },
+  { id: 'formacion', name: 'Formación y desarrollo', hint: 'Lo que inviertes en aprender.',
+    items: [['cursos', 'Cursos'], ['libros', 'Libros']] },
+  { id: 'otros', name: 'Otros / compromisos', hint: 'Personas y causas que apoyas.',
+    items: [['familia', 'Apoyo familiar'], ['donaciones', 'Donaciones'], ['mascotas', 'Mascotas']] },
+];
+const ALL_ITEMS = CATEGORIES.flatMap(c => c.items.map(([k]) => k));
+
+// Valores de ejemplo por moneda (solo para ilustrar; no son recomendaciones).
+const EXAMPLES = {
+  PEN: { vivienda: 2200, servicios: 350, alimentacion: 1200, transporte: 400, salud: 350, salidas: 400, viajes: 500, hobbies: 200, cursos: 250, libros: 80, familia: 500, donaciones: 100, mascotas: 150 },
+  USD: { vivienda: 1500, servicios: 200, alimentacion: 600, transporte: 250, salud: 300, salidas: 250, viajes: 300, hobbies: 120, cursos: 100, libros: 30, familia: 200, donaciones: 50, mascotas: 80 },
+  CLP: { vivienda: 650000, servicios: 90000, alimentacion: 350000, transporte: 90000, salud: 110000, salidas: 120000, viajes: 150000, hobbies: 60000, cursos: 60000, libros: 20000, familia: 150000, donaciones: 30000, mascotas: 40000 },
+};
+
+const RATE_MIN = 4, RATE_MAX = 8, RATE_DEFAULT = 6;
+
+/* ---------- Cálculos (reglas del proyecto) ---------- */
+const toNumber = v => { const n = parseFloat(String(v).replace(',', '.')); return Number.isFinite(n) && n > 0 ? n : 0; };
+const sumKeys = (values, keys) => keys.reduce((s, k) => s + toNumber(values[k]), 0);
+const monthlyTotal = values => sumKeys(values, ALL_ITEMS);            // Suma de las 4 categorías
+const annualTotal = monthly => monthly * 12;                            // Costo mensual × 12
+const goalConservative = annual => annual * 25;                         // Regla del 4%: anual × 25
+const goalDynamic = (annual, ratePct) => ratePct > 0 ? annual / (ratePct / 100) : 0; // anual ÷ tasa
+
+const fmt = (n, cur) => {
+  const c = CURRENCIES[cur];
+  const s = new Intl.NumberFormat(c.locale, { maximumFractionDigits: c.decimals, minimumFractionDigits: 0 }).format(Math.round(n));
+  return `${c.symbol} ${s}`;
+};
+const fmtCompact = (n, cur) => {
+  const c = CURRENCIES[cur];
+  if (n >= 1e6) {
+    const v = new Intl.NumberFormat('es-PE', { maximumFractionDigits: n >= 1e8 ? 0 : 1 }).format(n / 1e6);
+    return `${c.symbol} ${v} ${n / 1e6 >= 2 ? 'millones' : 'millón'}`;
+  }
+  return fmt(n, cur);
+};
+
+/* ---------- Persistencia ---------- */
+const exampleState = cur => ({ currency: cur, values: Object.fromEntries(ALL_ITEMS.map(k => [k, String(EXAMPLES[cur][k])])), rate: RATE_DEFAULT });
+const emptyValues = () => Object.fromEntries(ALL_ITEMS.map(k => [k, '']));
+
+function loadState() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !CURRENCIES[s.currency] || typeof s.values !== 'object') return null;
+    const rate = Math.min(RATE_MAX, Math.max(RATE_MIN, Number(s.rate) || RATE_DEFAULT));
+    return { currency: s.currency, values: { ...emptyValues(), ...s.values }, rate, isExample: !!s.isExample };
+  } catch (e) { return null; }
+}
+function saveState(s) {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(s)); return true; } catch (e) { return false; }
+}
+
+/* ---------- Componentes ---------- */
+function CurrencySwitch({ value, onChange }) {
+  return (
+    <div role="radiogroup" aria-label="Moneda" className="inline-flex rounded-full border border-line bg-surface p-1">
+      {Object.values(CURRENCIES).map(c => {
+        const active = c.code === value;
+        return (
+          <button key={c.code} id={`moneda-${c.code}`} role="radio" aria-checked={active} onClick={() => onChange(c.code)}
+            className={`num rounded-full px-3.5 py-2 text-sm font-semibold transition-colors ${active ? 'bg-hero text-heroink' : 'text-soft hover:text-ink'}`}>
+            <span className={active ? 'text-gold' : ''}>{c.symbol}</span> {c.code}
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+function MoneyInput({ id, label, value, onChange, cur }) {
+  return (
+    <label htmlFor={id} className="flex items-center justify-between gap-3 py-2.5">
+      <span className="min-w-0 text-[15px] leading-snug text-ink">{label}</span>
+      <span className="field flex w-[44%] max-w-[180px] shrink-0 items-center gap-1.5 rounded-xl border border-line bg-bg px-3 py-2 transition-shadow">
+        <span className="text-sm font-semibold text-goldink">{CURRENCIES[cur].symbol}</span>
+        <input id={id} type="number" inputMode="decimal" min="0" step="any" placeholder="0" value={value}
+          onChange={e => onChange(e.target.value)}
+          className="num w-full min-w-0 bg-transparent text-right text-[16px] font-semibold text-ink placeholder:text-soft focus:outline-none" />
+      </span>
+    </label>
+  );
+}
+
+function CategoryCard({ cat, index, values, setValue, cur, monthly }) {
+  const subtotal = sumKeys(values, cat.items.map(([k]) => k));
+  const share = monthly > 0 ? Math.round((subtotal / monthly) * 100) : 0;
+  return (
+    <section className="rounded-2xl border border-line bg-surface p-4 sm:p-5" aria-labelledby={`cat-${cat.id}`}>
+      <header className="flex items-start justify-between gap-3 border-b border-line pb-3">
+        <div className="min-w-0">
+          <p className="eyebrow text-goldink">Categoría {index + 1} de 4</p>
+          <h3 id={`cat-${cat.id}`} className="font-display mt-1 text-xl font-medium text-ink">{cat.name}</h3>
+          <p className="mt-0.5 text-sm text-soft">{cat.hint}</p>
+        </div>
+        <div className="shrink-0 text-right">
+          <p className="num text-lg font-bold text-ink">{fmt(subtotal, cur)}</p>
+          <p className="num text-xs text-soft">{share}% del total</p>
+        </div>
+      </header>
+      <div className="divide-y divide-line">
+        {cat.items.map(([k, label]) => (
+          <MoneyInput key={k} id={`g-${k}`} label={label} value={values[k]} onChange={v => setValue(k, v)} cur={cur} />
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function Composition({ values, monthly }) {
+  const shades = ['var(--ink)', 'var(--gold)', 'color-mix(in srgb, var(--ink) 45%, var(--surface))', 'color-mix(in srgb, var(--gold) 50%, var(--surface))'];
+  if (monthly <= 0) return null;
+  return (
+    <div>
+      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-surface2" aria-hidden="true">
+        {CATEGORIES.map((c, i) => {
+          const v = sumKeys(values, c.items.map(([k]) => k));
+          return <div key={c.id} style={{ width: `${(v / monthly) * 100}%`, background: shades[i] }} />;
+        })}
+      </div>
+      <ul className="mt-3 grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs text-soft">
+        {CATEGORIES.map((c, i) => {
+          const v = sumKeys(values, c.items.map(([k]) => k));
+          return (
+            <li key={c.id} className="flex min-w-0 items-center gap-2">
+              <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: shades[i] }} />
+              <span className="truncate">{c.name}</span>
+              <span className="num ml-auto font-semibold text-ink">{Math.round((v / monthly) * 100)}%</span>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+function Results({ cur, monthly, annual, rate, setRate, values }) {
+  const conservative = goalConservative(annual);
+  const dynamic = goalDynamic(annual, rate);
+  const multiple = rate > 0 ? 100 / rate : 0;
+  const pct = ((rate - RATE_MIN) / (RATE_MAX - RATE_MIN)) * 100;
+  const diff = conservative - dynamic;
+
+  return (
+    <div className="flex flex-col gap-4">
+      {/* Costo de vida */}
+      <section className="rounded-2xl border border-line bg-surface p-5" aria-labelledby="res-costo">
+        <h2 id="res-costo" className="eyebrow text-goldink">Tu costo de vida</h2>
+        <div className="mt-3 grid grid-cols-2 gap-4">
+          <div className="min-w-0">
+            <p className="text-sm text-soft">Mensual</p>
+            <p className="num font-display mt-1 break-words text-[26px] font-semibold leading-tight text-ink sm:text-3xl">{fmt(monthly, cur)}</p>
+          </div>
+          <div className="min-w-0 border-l border-line pl-4">
+            <p className="text-sm text-soft">Anual <span className="text-xs">(× 12)</span></p>
+            <p className="num font-display mt-1 break-words text-[26px] font-semibold leading-tight text-ink sm:text-3xl">{fmt(annual, cur)}</p>
+          </div>
+        </div>
+        <div className="mt-5"><Composition values={values} monthly={monthly} /></div>
+      </section>
+
+      {/* Número de la libertad */}
+      <section className="rounded-2xl bg-hero p-5 text-heroink" aria-labelledby="res-meta">
+        <h2 id="res-meta" className="eyebrow text-gold">Tu Número de la Libertad</h2>
+        <p className="mt-1 text-sm text-herosoft">El capital que necesitas para cubrir tu costo de vida anual con retiros de tu portafolio.</p>
+
+        <div className="mt-4 flex flex-col gap-3">
+          {/* Conservador */}
+          <article className="rounded-xl border border-white/15 bg-white/5 p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h3 className="text-[15px] font-semibold">Escenario conservador</h3>
+              <span className="rounded-full border border-gold px-2.5 py-0.5 text-xs font-semibold text-gold">Regla del 4%</span>
+            </div>
+            <p className="num font-display mt-2 break-words text-[34px] font-semibold leading-none sm:text-4xl">{fmt(conservative, cur)}</p>
+            <p className="num mt-2 text-xs text-herosoft">{fmt(annual, cur)} al año × 25</p>
+          </article>
+
+          {/* Dinámico */}
+          <article className="rounded-xl border border-gold bg-white/5 p-4">
+            <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
+              <h3 className="text-[15px] font-semibold">Escenario dinámico</h3>
+              <span className="num rounded-full bg-gold px-2.5 py-0.5 text-xs font-bold text-[#1B3B2B]">Tasa {rate.toFixed(1).replace('.', ',')}%</span>
+            </div>
+            <p className="num font-display mt-2 break-words text-[34px] font-semibold leading-none sm:text-4xl">{fmt(dynamic, cur)}</p>
+            <p className="num mt-2 text-xs text-herosoft">{fmt(annual, cur)} al año ÷ {rate.toFixed(1).replace('.', ',')}% (≈ × {multiple.toFixed(1).replace('.', ',')})</p>
+
+            <div className="mt-4">
+              <div className="flex items-center justify-between gap-3">
+                <label htmlFor="tasa" className="text-sm text-herosoft">Tasa de retiro anual</label>
+                <span className="field flex items-center gap-1 rounded-lg border border-white/20 bg-white/10 px-2 py-1">
+                  <input id="tasa-num" type="number" inputMode="decimal" min={RATE_MIN} max={RATE_MAX} step="0.1" value={rate}
+                    aria-label="Tasa de retiro en porcentaje"
+                    onChange={e => { const v = parseFloat(e.target.value); if (Number.isFinite(v)) setRate(Math.min(RATE_MAX, Math.max(RATE_MIN, v))); }}
+                    className="num w-12 bg-transparent text-right text-[16px] font-semibold text-heroink focus:outline-none" />
+                  <span className="text-sm text-herosoft">%</span>
+                </span>
+              </div>
+              <input id="tasa" type="range" min={RATE_MIN} max={RATE_MAX} step="0.1" value={rate}
+                onChange={e => setRate(parseFloat(e.target.value))} style={{ '--p': `${pct}%` }} className="mt-3" />
+              <div className="num mt-1.5 flex justify-between text-[11px] text-herosoft">
+                {[4, 5, 6, 7, 8].map(n => <span key={n}>{n}%</span>)}
+              </div>
+            </div>
+          </article>
+        </div>
+
+        {annual > 0 && Math.abs(diff) >= 1 && (
+          <p className="num mt-4 text-sm text-herosoft">
+            Con una tasa del {rate.toFixed(1).replace('.', ',')}%, la meta es {fmt(Math.abs(diff), cur)} {diff > 0 ? 'menor' : 'mayor'} que con la regla del 4%.
+          </p>
+        )}
+      </section>
+
+      <p className="px-1 text-xs leading-relaxed text-soft">
+        Fórmulas: anual = mensual × 12 · conservador = anual × 25 · dinámico = anual ÷ tasa de retiro. Herramienta de cálculo, no constituye asesoría financiera.
+      </p>
+    </div>
+  );
+}
+
+function App() {
+  const initial = useMemo(() => loadState() || { ...exampleState('PEN'), isExample: true }, []);
+  const [currency, setCurrency] = useState(initial.currency);
+  const [values, setValues] = useState(initial.values);
+  const [rate, setRateRaw] = useState(initial.rate);
+  const [isExample, setIsExample] = useState(initial.isExample);
+  const [confirmClear, setConfirmClear] = useState(false);
+  const [saved, setSaved] = useState(null); // null | true | false
+
+  const setRate = r => setRateRaw(Math.round(r * 10) / 10);
+  const setValue = (k, v) => { setValues(prev => ({ ...prev, [k]: v })); setIsExample(false); };
+
+  // Guardado automático
+  useEffect(() => {
+    const ok = saveState({ currency, values, rate, isExample });
+    setSaved(ok);
+  }, [currency, values, rate, isExample]);
+
+  useEffect(() => {
+    if (!confirmClear) return;
+    const t = setTimeout(() => setConfirmClear(false), 4000);
+    return () => clearTimeout(t);
+  }, [confirmClear]);
+
+  const monthly = monthlyTotal(values);
+  const annual = annualTotal(monthly);
+
+  const changeCurrency = cur => {
+    if (cur === currency) return;
+    setCurrency(cur);
+    if (isExample) setValues(exampleState(cur).values); // los ejemplos se adaptan; tus datos no se convierten
+  };
+  const loadExample = () => { setValues(exampleState(currency).values); setRate(RATE_DEFAULT); setIsExample(true); setConfirmClear(false); };
+  const clearData = () => {
+    if (!confirmClear) { setConfirmClear(true); return; }
+    setValues(emptyValues()); setRate(RATE_DEFAULT); setIsExample(false); setConfirmClear(false);
+  };
+
+  return (
+    <div className="min-h-full bg-bg pb-28 lg:pb-12">
+      <div className="wrap mx-auto max-w-6xl" style={{ paddingBlock: '20px 0' }}>
+        {/* Encabezado */}
+        <header className="flex flex-col gap-4 pt-2 sm:flex-row sm:items-end sm:justify-between">
+          <div className="min-w-0">
+            <p className="eyebrow text-goldink">Calculadora de libertad anticipada</p>
+            <h1 className="font-display mt-1.5 text-[34px] font-medium leading-[1.05] text-ink sm:text-5xl">Tu Número de la Libertad</h1>
+            <p className="mt-2 max-w-[52ch] text-[15px] text-soft">Ingresa tu gasto real de vida al mes. El ahorro y la inversión no se incluyen, para medir solo lo que gastas.</p>
+          </div>
+          <CurrencySwitch value={currency} onChange={changeCurrency} />
+        </header>
+
+        {/* Barra de acciones */}
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <button id="btn-ejemplo" onClick={loadExample}
+            className="rounded-full border border-line bg-surface px-4 py-2 text-sm font-semibold text-ink hover:border-gold">
+            Cargar ejemplo
+          </button>
+          <button id="btn-limpiar" onClick={clearData}
+            className={`rounded-full border px-4 py-2 text-sm font-semibold transition-colors ${confirmClear ? 'border-[#B4553D] bg-[#B4553D] text-white' : 'border-line bg-surface text-ink hover:border-gold'}`}>
+            {confirmClear ? 'Toca de nuevo para borrar' : 'Limpiar datos'}
+          </button>
+          <span className="ml-auto text-xs text-soft" aria-live="polite">
+            {isExample ? 'Valores de ejemplo, edítalos con los tuyos' : saved === false ? 'No se pudo guardar en este navegador' : 'Guardado automáticamente'}
+          </span>
+        </div>
+
+        <div className="mt-5 grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(0,420px)] lg:items-start">
+          {/* Presupuesto */}
+          <div className="flex min-w-0 flex-col gap-4">
+            {CATEGORIES.map((c, i) => (
+              <CategoryCard key={c.id} cat={c} index={i} values={values} setValue={setValue} cur={currency} monthly={monthly} />
+            ))}
+            {!isExample && (
+              <p className="px-1 text-xs text-soft">Al cambiar de moneda tus montos se mantienen tal como los escribiste; no se aplica tipo de cambio.</p>
+            )}
+          </div>
+
+          {/* Resultados */}
+          <div id="resultados" className="min-w-0 lg:sticky lg:top-5">
+            <Results cur={currency} monthly={monthly} annual={annual} rate={rate} setRate={setRate} values={values} />
+          </div>
+        </div>
+      </div>
+
+      {/* Barra fija en móvil */}
+      <div className="sticky-bar wrap fixed inset-x-0 bottom-0 z-20 border-t border-line bg-surface pt-2.5 backdrop-blur lg:hidden">
+        <a href="#resultados" className="mx-auto flex max-w-6xl items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-[11px] text-soft">Costo mensual</p>
+            <p className="num truncate text-base font-bold text-ink">{fmt(monthly, currency)}</p>
+          </div>
+          <div className="min-w-0 text-right">
+            <p className="text-[11px] text-soft">Meta conservadora (4%)</p>
+            <p className="num font-display truncate text-lg font-semibold text-goldink">{fmtCompact(goalConservative(annual), currency)}</p>
+          </div>
+        </a>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+</script>
